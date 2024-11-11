@@ -1,77 +1,155 @@
-import { useState, useRef, useEffect } from "react";
-import { IoSend } from "react-icons/io5"; // Para el ícono de enviar mensaje
+import React, { useState, useEffect, useRef } from "react";
+import { IoSend } from "react-icons/io5";
+import Loader from "../components/Loader/Loader.jsx";
+import "/public/css/pages/chat.css";
 
 export const Chat = () => {
-  const [message, setMessage] = useState(""); // Estado para almacenar el mensaje
-  const [messages, setMessages] = useState<string[]>([]); // Estado para almacenar todos los mensajes
-  const messageEndRef = useRef<HTMLDivElement>(null); // Referencia para hacer scroll al final de los mensajes
+  const [inputText, setInputText] = useState("");
+  const [messages, setMessages] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [disableInput, setDisableInput] = useState(false);
+  const messagesEndRef = useRef(null);
 
-  // Función para enviar mensaje
-  const handleSendMessage = () => {
-    if (message.trim() !== "") {
-      setMessages([...messages, message]);
-      setMessage(""); // Limpiar el campo después de enviar
-    }
+  const handleChange = (e) => {
+    setInputText(e.target.value);
   };
 
-  // Función para enviar mensaje con Enter
-  const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter") {
-      handleSendMessage();
-    }
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
-  // Hacer scroll al final del chat cada vez que se agregue un nuevo mensaje
   useEffect(() => {
-    messageEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    scrollToBottom();
   }, [messages]);
 
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+
+    if (!inputText.trim()) return;
+
+    const newMessage = { type: "question", text: inputText };
+    setMessages((prevMessages) => [...prevMessages, newMessage]);
+    setInputText("");
+    setLoading(true);
+    setDisableInput(true);
+
+    const loadingMessage = { type: "answer", text: "" };
+    setMessages((prevMessages) => [...prevMessages, loadingMessage]);
+
+    try {
+      const response = await fetch("http://localhost:8000/jorgito/query/", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ input_text: inputText }),
+      });
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let text = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value, { stream: true });
+        for (const char of chunk) {
+          text += char;
+          setMessages((prevMessages) => {
+            const updatedMessages = [...prevMessages];
+            updatedMessages[updatedMessages.length - 1] = {
+              type: "answer",
+              text,
+            };
+            return updatedMessages;
+          });
+          await new Promise((resolve) => setTimeout(resolve, 50));
+        }
+      }
+
+      setMessages((prevMessages) => [
+        ...prevMessages,
+        { type: "answer", text: "¿Necesitas ayuda adicional?" },
+      ]);
+    } catch (error) {
+      console.error("Error al obtener respuesta:", error);
+      setMessages((prevMessages) => {
+        const updatedMessages = [...prevMessages];
+        updatedMessages[updatedMessages.length - 1] = {
+          type: "answer",
+          text: "Error al obtener respuesta",
+        };
+        return updatedMessages;
+      });
+    } finally {
+      setLoading(false);
+      setDisableInput(false);
+    }
+  };
+
+  const renderMessageText = (text) => {
+    return text.split(/\*\*(.*?)\*\*/).map((part, index) => {
+      if (index % 2 === 0) {
+        return part.split("\n").map((line, i) => (
+          <React.Fragment key={i}>
+            {line}
+            <br />
+          </React.Fragment>
+        ));
+      } else {
+        return <strong key={index}>{part}</strong>;
+      }
+    });
+  };
+
   return (
-    <div
-      className="flex flex-col bg-gray-100 rounded-lg shadow-lg max-w-5xl mx-auto"
-      style={{ height: "80vh" }}
-    >
-      {" "}
-      {/* Altura fija para el chat */}
-      {/* Área de mensajes */}
-      <div
-        className="flex-1 overflow-y-auto p-4 bg-gray-50 rounded-t-lg"
-        style={{ maxHeight: "calc(100% - 80px)", minHeight: "300px" }} // Altura fija para la sección de mensajes
-      >
-        <div className="space-y-4">
-          {messages.map((msg, index) => (
+    <div className="chat">
+      <div className="chat-container">
+        <div className="messages-container">
+          {messages.map((message, index) => (
             <div
               key={index}
-              className={`p-3 rounded-lg ${
-                index % 2 === 0
-                  ? "bg-blue-100 self-start"
-                  : "bg-blue-500 text-white self-end"
-              } max-w-xs`}
+              className={`message ${
+                message.type === "question" ? "left" : "right"
+              }`}
             >
-              <p>{msg}</p>
+              {loading && message.text === "" ? (
+                <div className="loading-container">
+                  <Loader />
+                  <p>Jorgito está pensando...</p>
+                </div>
+              ) : (
+                <p>
+                  {typeof message.text === "string"
+                    ? renderMessageText(message.text)
+                    : message.text}
+                </p>
+              )}
             </div>
           ))}
+          <div ref={messagesEndRef} />
         </div>
-        {/* Espacio vacío al final para permitir el scroll */}
-        <div ref={messageEndRef}></div>
-      </div>
-      {/* Área de entrada de texto */}
-      <div className="bg-gray-200 p-4 flex items-center rounded-b-lg">
-        <input
-          type="text"
-          placeholder="Escribe un mensaje..."
-          value={message}
-          onChange={(e) => setMessage(e.target.value)}
-          onKeyPress={handleKeyPress} // Detecta la tecla "Enter"
-          className="w-full p-3 border border-gray-300 rounded-lg mr-4 focus:outline-none focus:ring-2 focus:ring-blue-500"
-        />
-        <button
-          onClick={handleSendMessage}
-          className="bg-blue-500 hover:bg-blue-600 text-white p-3 rounded-lg transition duration-200 ease-in-out"
-        >
-          <IoSend size={20} />
-        </button>
+        <form onSubmit={handleSubmit} className="input-form">
+          <input
+            type="text"
+            value={inputText}
+            onChange={handleChange}
+            placeholder="Hazme tu pregunta"
+            className="input-field"
+            disabled={disableInput}
+          />
+          <button
+            type="submit"
+            className="send-button"
+            disabled={disableInput || !inputText.trim()}
+          >
+            <IoSend size={20} />
+          </button>
+        </form>
       </div>
     </div>
   );
 };
+
+export default Chat;
