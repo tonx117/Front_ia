@@ -1,3 +1,6 @@
+/**
+ * OMAAAAIGAAA
+ */
 import React, { useState, useEffect, useRef } from "react";
 import { IoSend } from "react-icons/io5";
 import Loader from "../components/Loader/Loader.jsx";
@@ -151,5 +154,7 @@ export const Chat = () => {
     </div>
   );
 };
+
+
 
 export default Chat;
