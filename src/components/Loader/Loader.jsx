@@ -1,6 +1,6 @@
 import React from "react";
 import "/public/css/components/loaders/loader.css"; // Importa el archivo CSS donde se definirán los estilos
-
+// omaiga
 const Loader = () => {
   return (
     <div className="loader">
